@@ -244,7 +244,12 @@ class _NotesWorkspaceState extends State<NotesWorkspace> {
 
   void _selectNote(Note note) {
     final previousNote = selectedNote;
-    if (previousNote?.id == note.id) return;
+    if (previousNote?.id == note.id) {
+      if (isSidebarVisible) {
+        setState(() => isSidebarVisible = false);
+      }
+      return;
+    }
     autosaveTimer?.cancel();
     if (previousNote != null) {
       final title = titleController.text.trim();
@@ -259,7 +264,10 @@ class _NotesWorkspaceState extends State<NotesWorkspace> {
         );
       }
     }
-    setState(() => selectedNote = note);
+    setState(() {
+      selectedNote = note;
+      isSidebarVisible = false;
+    });
     titleController.value = TextEditingValue(text: note.title);
     bodyController.value = TextEditingValue(text: note.body);
   }
@@ -526,6 +534,10 @@ class _NotesWorkspaceState extends State<NotesWorkspace> {
                           MediaQuery.viewInsetsOf(context).bottom > 0;
                       final isAndroid =
                           defaultTargetPlatform == TargetPlatform.android;
+                      final isAndroidLandscape =
+                          isAndroid &&
+                          MediaQuery.orientationOf(context) ==
+                              Orientation.landscape;
                       final showPreview =
                           isPreviewVisible &&
                           (isAndroid || isWide) &&
@@ -534,37 +546,45 @@ class _NotesWorkspaceState extends State<NotesWorkspace> {
                           ? MediaQuery.orientationOf(context) ==
                                 Orientation.landscape
                           : isWide;
+                      final placesSidebarBesideEditor =
+                          isWide || isAndroidLandscape;
+                      final coversEditor = isAndroid && !isAndroidLandscape;
                       final sidebarWidth = isSidebarVisible
-                          ? (isWide ? 310.0 : 260.0)
+                          ? placesSidebarBesideEditor
+                                ? (isWide ? 310.0 : 260.0)
+                                : coversEditor
+                                ? constraints.maxWidth
+                                : constraints.maxWidth * 0.85
                           : 0.0;
-                      final editorLeft = isWide ? sidebarWidth : 0.0;
+                      final editorLeft =
+                          isSidebarVisible && placesSidebarBesideEditor
+                          ? sidebarWidth
+                          : 0.0;
                       return Stack(
                         children: [
-                          Positioned.fill(
-                            left: editorLeft,
-                            child: ClipRect(
-                              child: ColoredBox(
-                                color: Theme.of(context)
-                                    .scaffoldBackgroundColor,
-                                child: _buildEditorArea(
-                                  showPreview,
-                                  isSideBySide,
+                          if (!isSidebarVisible ||
+                              placesSidebarBesideEditor ||
+                              !coversEditor)
+                            Positioned.fill(
+                              left: editorLeft,
+                              child: ClipRect(
+                                child: ColoredBox(
+                                  color: Theme.of(context)
+                                      .scaffoldBackgroundColor,
+                                  child: _buildEditorArea(
+                                    showPreview,
+                                    isSideBySide,
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
                           if (isSidebarVisible)
                             Positioned(
                               left: 0,
                               top: 0,
                               bottom: 0,
-                              width: isWide
-                                  ? sidebarWidth
-                                  : sidebarWidth.clamp(
-                                      0.0,
-                                      constraints.maxWidth * 0.85,
-                                    ),
-                              child: _buildSidebar(isWide),
+                              width: sidebarWidth,
+                              child: _buildSidebar(),
                             ),
                         ],
                       );
@@ -576,12 +596,12 @@ class _NotesWorkspaceState extends State<NotesWorkspace> {
     );
   }
 
-  Widget _buildSidebar(bool isWide) {
+  Widget _buildSidebar() {
     return LayoutBuilder(
       builder: (context, constraints) {
         final compact = constraints.maxHeight < 460;
         return Container(
-          width: isWide ? 310 : 260,
+          width: double.infinity,
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surfaceContainerLow,
             border: Border(
@@ -631,7 +651,7 @@ class _NotesWorkspaceState extends State<NotesWorkspace> {
       padding: EdgeInsets.fromLTRB(22, compact ? 4 : 20, 14, compact ? 0 : 12),
       child: Row(
         children: [
-          SvgPicture.asset('assets/pen-nib-fill.svg', width: 26, height: 26),
+          SvgPicture.asset('assets/pen-nib-fill.svg', width: 22, height: 22),
           Text(
             'लिपि:',
             style: const TextStyle(
@@ -641,10 +661,16 @@ class _NotesWorkspaceState extends State<NotesWorkspace> {
             ),
           ),
           const Spacer(),
+          if (isSidebarVisible)
+            IconButton(
+              onPressed: _toggleSidebar,
+              tooltip: 'Close notes pane',
+              icon: const Icon(LucideIcons.x, size: 18),
+            ),
           IconButton(
             onPressed: _showAbout,
             tooltip: 'Help and about',
-            icon: const Icon(LucideIcons.circleHelp),
+            icon: const Icon(LucideIcons.circleHelp, size: 18),
           ),
           IconButton(
             onPressed: widget.onToggleTheme,
@@ -653,6 +679,7 @@ class _NotesWorkspaceState extends State<NotesWorkspace> {
               Theme.of(context).brightness == Brightness.dark
                   ? LucideIcons.sun
                   : LucideIcons.moon,
+              size: 18,
             ),
           ),
         ],
@@ -665,7 +692,7 @@ class _NotesWorkspaceState extends State<NotesWorkspace> {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: FilledButton.icon(
         onPressed: _createNote,
-        icon: const Icon(LucideIcons.plus),
+        icon: const Icon(LucideIcons.plus, size: 18),
         label: const Text('New note'),
         style: FilledButton.styleFrom(
           minimumSize: Size.fromHeight(compact ? 36 : 44),
@@ -711,7 +738,7 @@ class _NotesWorkspaceState extends State<NotesWorkspace> {
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: _exportSelected,
-                  icon: const Icon(LucideIcons.archive, size: 18),
+                  icon: const Icon(LucideIcons.archive, size: 16),
                   label: const Text('Backup'),
                 ),
               ),
@@ -719,7 +746,7 @@ class _NotesWorkspaceState extends State<NotesWorkspace> {
               IconButton(
                 onPressed: _restoreNotes,
                 tooltip: 'Restore notes from ZIP',
-                icon: const Icon(LucideIcons.archiveRestore),
+                icon: const Icon(LucideIcons.archiveRestore, size: 18),
               ),
             ],
           ),
@@ -856,7 +883,7 @@ class _NotesWorkspaceState extends State<NotesWorkspace> {
             IconButton(
               onPressed: _shareSelectedNote,
               tooltip: 'Share note',
-              icon: const Icon(LucideIcons.share),
+              icon: const Icon(LucideIcons.share, size: 18),
             ),
             IconButton(
               onPressed: () =>
@@ -864,12 +891,13 @@ class _NotesWorkspaceState extends State<NotesWorkspace> {
               tooltip: 'Toggle preview',
               icon: Icon(
                 isPreviewVisible ? LucideIcons.eye : LucideIcons.eyeOff,
+                size: 18,
               ),
             ),
             IconButton(
               onPressed: _toggleSidebar,
               tooltip: isSidebarVisible ? 'Hide notes pane' : 'Show notes pane',
-              icon: const Icon(LucideIcons.panelLeft),
+              icon: const Icon(LucideIcons.panelLeft, size: 18),
             ),
           ],
         ),
@@ -879,13 +907,16 @@ class _NotesWorkspaceState extends State<NotesWorkspace> {
 
   Widget _buildEditor() {
     final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(28, 8, 18, keyboardVisible ? 0 : 24),
-      child: Column(
-        children: [
-          _buildMarkdownToolbar(),
-          const SizedBox(height: 12),
-          Expanded(
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: _buildMarkdownToolbar(),
+        ),
+        const SizedBox(height: 12),
+        Expanded(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(28, 0, 18, keyboardVisible ? 0 : 24),
             child: TextField(
               controller: bodyController,
               focusNode: bodyFocusNode,
@@ -910,58 +941,61 @@ class _NotesWorkspaceState extends State<NotesWorkspace> {
               ),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
   Widget _buildMarkdownToolbar() {
     return Align(
       alignment: Alignment.centerLeft,
-      child: Wrap(
-        spacing: 2,
-        children: [
-          _toolbarButton(
-            'Bold',
-            LucideIcons.bold,
-            () => _insertMarkdown('**', '**'),
-          ),
-          _toolbarButton(
-            'Italic',
-            LucideIcons.italic,
-            () => _insertMarkdown('*', '*'),
-          ),
-          _toolbarButton(
-            'Heading',
-            LucideIcons.heading,
-            () => _insertMarkdown('# '),
-          ),
-          _toolbarButton(
-            'Link',
-            LucideIcons.link,
-            () => _insertMarkdown('[', '](https://)'),
-          ),
-          _toolbarButton(
-            'Bulleted list',
-            LucideIcons.list,
-            () => _insertMarkdown('- '),
-          ),
-          _toolbarButton(
-            'Numbered list',
-            LucideIcons.listOrdered,
-            () => _insertMarkdown('1. '),
-          ),
-          _toolbarButton(
-            'Quote',
-            LucideIcons.quote,
-            () => _insertMarkdown('> '),
-          ),
-          _toolbarButton(
-            'Code',
-            LucideIcons.code,
-            () => _insertMarkdown('`', '`'),
-          ),
-        ],
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _toolbarButton(
+              'Bold',
+              LucideIcons.bold,
+              () => _insertMarkdown('**', '**'),
+            ),
+            _toolbarButton(
+              'Italic',
+              LucideIcons.italic,
+              () => _insertMarkdown('*', '*'),
+            ),
+            _toolbarButton(
+              'Heading',
+              LucideIcons.heading,
+              () => _insertMarkdown('# '),
+            ),
+            _toolbarButton(
+              'Link',
+              LucideIcons.link,
+              () => _insertMarkdown('[', '](https://)'),
+            ),
+            _toolbarButton(
+              'Bulleted list',
+              LucideIcons.list,
+              () => _insertMarkdown('- '),
+            ),
+            _toolbarButton(
+              'Numbered list',
+              LucideIcons.listOrdered,
+              () => _insertMarkdown('1. '),
+            ),
+            _toolbarButton(
+              'Quote',
+              LucideIcons.quote,
+              () => _insertMarkdown('> '),
+            ),
+            _toolbarButton(
+              'Code',
+              LucideIcons.code,
+              () => _insertMarkdown('`', '`'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -973,7 +1007,9 @@ class _NotesWorkspaceState extends State<NotesWorkspace> {
   ) => IconButton(
     onPressed: onPressed,
     tooltip: tooltip,
-    icon: Icon(icon, size: 19),
+    padding: EdgeInsets.zero,
+    constraints: const BoxConstraints.tightFor(width: 36, height: 40),
+    icon: Icon(icon, size: 16),
   );
 
   Widget _buildPreview({required bool isSideBySide}) {

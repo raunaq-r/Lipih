@@ -1,4 +1,4 @@
-package com.lipih.lipih
+package com.raunaq.lipih
 
 import io.flutter.embedding.android.FlutterActivity
 
